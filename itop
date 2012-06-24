@@ -1,0 +1,96 @@
+#!/usr/bin/perl
+#
+#	Interrupts 'top-like' utility for Linux
+#
+#	Show the interrupts per second/per IRQ per CPU and TOTAL
+#
+# Usage
+# Default: display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
+# if (CPUS > 8): DON'T display ALL CPUs, just the TOTAL
+#
+# -a force display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
+# -t DON'T display ALL CPUs, just the TOTAL
+
+use IO::File;
+use Term::Cap;
+
+$term = Tgetent Term::Cap;
+print $term->Tputs('cl');
+
+$fh = new IO::File;
+
+if (!$fh->open("</proc/interrupts")) {
+	die "Unable to open /proc/interrupts";
+}
+
+$top = $fh->getpos();
+$first_time = 0;
+while (1) {
+	$fh->setpos($top);
+
+	# Read and parse interrupts
+	$header = <$fh>; # Header line
+	# Count CPUs
+	$cpus = () = $header =~ /CPU/g;
+	chomp($ARGV[0]);
+	if ("$ARGV[0]" eq '-a') {
+		$DISPALLCPU=1;
+	} elsif (("$ARGV[0]" ne '-a') and ($cpus > 8)) {
+		$DISPALLCPU=0;
+	} elsif ("$ARGV[0]" eq '-t') {
+		$DISPALLCPU=0;
+	} else {
+		$DISPALLCPU=1;
+	}
+
+	my %irqs;
+	while (<$fh>) {
+		my @array = split(' ',$_);
+			$irq = $array[0];
+			chop($irq);
+			for ($cpu = 0; $cpu < $cpus; $cpu++) {
+				$icount = $array[$cpu+1];
+				$irqs{$irq}[$cpu] = $icount;
+			}
+			$array_len = @array;
+			$elements = $array_len - 1 - $cpus;
+			@last_n = @array[-$elements..-1];
+			$desc = join(' ',@last_n);
+			$irq_device{$irq} = $desc;
+#			print "DEBUG IRQ=$irq CPU=$cpu icount=$icount desc=$desc\n";
+	}
+
+	if ($first_time != 0) {
+		# Prepare sceeen
+		print $term->Tputs('ho');
+		# Output header
+		if ($DISPALLCPU > 0) {
+			printf("%28s%" . ($cpus + 1) * 16 . "s", "", "IRQs/Second\n");
+		} else {
+			printf("%28s%" . 1 * 16 . "s", "", "IRQs/Second\n");
+		}
+		printf('%20s (%3s)  ', "Device", "IRQ");
+		if ($DISPALLCPU > 0) {
+			foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
+				printf('%15s ', 'CPU' . $cpu);
+			}
+		}
+		printf("%15s\n", "TOTAL");
+		foreach $irq (sort keys %irqs) {
+			printf('%20s (%3s): ', substr($irq_device{$irq}, 0, 20), $irq);
+			$total = 0;
+			for ($cpu = 0; $cpu < $cpus; $cpu ++) {
+				if ($DISPALLCPU > 0) {
+					printf("%15s ", $irqs{$irq}[$cpu] - $last{$irq}[$cpu]);
+				}
+				$total += $irqs{$irq}[$cpu] - $last{$irq}[$cpu];
+			}
+			printf("%15s\n", $total);
+		}
+	}
+	$first_time = 1;
+	
+
+	%last = %irqs;
+	sleep 1;
+}
