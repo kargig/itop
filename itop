@@ -51,6 +51,7 @@ if (!$fh->open("</proc/interrupts")) {
 
 $top = $fh->getpos();
 $first_time = 0;
+my $expand=0;
 while (1) {
 	$fh->setpos($top);
 
@@ -75,18 +76,25 @@ PARSE:	while (<$fh>) {
 				$irqs{$irq}[$cpu] = $icount;
 			}
 			$irq_device{$irq} = @array[-1];
+			# check if there's a second device sharing the same IRQ
+			if (@array[-2] =~ /,/) {
+				$expand=10;
+				$irq_device{$irq}=@array[-2].@array[-1];
+			}
 	}
 
 	if ($first_time != 0) {
 		# Prepare sceeen
 		print $term->Tputs('ho');
 		# Output header
+		$cols=28+$expand;
+		$cols2=20+$expand;
 		if ($DISPALLCPU > 0) {
-			printf("%28s%" . ($cpus + 1) * 16 . "s", "", "IRQs/Second\n");
+			printf("%${cols}s%" . ($cpus + 1) * 16 . "s", "", "IRQs/Second\n");
 		} else {
-			printf("%28s%" . 1 * 16 . "s", "", "IRQs/Second\n");
+			printf("%${cols}s%" . 1 * 16 . "s", "", "IRQs/Second\n");
 		}
-		printf('%20s (%3s)  ', "Device", "IRQ");
+		printf("%${cols2}s (%3s)  ", "Device", "IRQ");
 		if ($DISPALLCPU > 0) {
 			foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
 				printf('%15s ', 'CPU' . $cpu);
@@ -94,7 +102,7 @@ PARSE:	while (<$fh>) {
 		}
 		printf("%15s\n", "TOTAL");
 		foreach $irq (sort mycriteria keys %irqs) {
-			printf('%20s (%3s): ', substr($irq_device{$irq}, 0, 20), $irq);
+			printf("%${cols2}s (%3s): ", substr($irq_device{$irq}, 0, $cols2), $irq);
 			$total = 0;
 			for ($cpu = 0; $cpu < $cpus; $cpu ++) {
 				if ($DISPALLCPU > 0) {
