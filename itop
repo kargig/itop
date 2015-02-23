@@ -76,16 +76,12 @@ PARSE:	while (<$fh>) {
 				$icount = $array[$cpu+1];
 				$irqs{$irq}[$cpu] = $icount;
 			}
-            if (@array[-1] =~ /_hcd/) {
+            if (@array[-1] =~ /_hcd:/) {
                 $item = @array[-1];
-                my @words = split /:/, $item;
                 # remove '_hcd' from usb names
-                    $item_prefix = @words[0];
-                    $item_prefix =~ s/_hcd//;
-                    $item = @words[1];
-                    $item =~ tr/,//d;
-                    $item = $item_prefix.":".$item;
-                    $irq_device{$irq}=$item;
+                $item =~ s/_hcd//;
+                $item =~ tr/,//d;
+                $irq_device{$irq}=$item;
             } else {
                 $irq_device{$irq} = @array[-1];
             }
@@ -93,14 +89,10 @@ PARSE:	while (<$fh>) {
         @revarray = reverse(@array);
         foreach $item (@revarray[1..4]) {
             if ($item =~ /,/) {
-                my @words = split /:/, $item;
                 # remove '_hcd' from usb names
-                if (@words[0] =~ /hci_hcd/) {
-                    $item_prefix = @words[0];
-                    $item_prefix =~ s/_hcd//;
-                    $item = @words[1];
+                if ($item =~ /hci_hcd:/) {
+                    $item =~ s/_hcd//;
                     $item =~ tr/,//d;
-                    $item = $item_prefix.":".$item;
                     $irq_device{$irq}=$item.",".$irq_device{$irq};
                 }
             }
