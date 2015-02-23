@@ -53,6 +53,7 @@ $top = $fh->getpos();
 $first_time = 0;
 my $expand=0;
 while (1) {
+    $expand=0;
 	$fh->setpos($top);
 
 	# Read and parse interrupts
@@ -76,19 +77,33 @@ PARSE:	while (<$fh>) {
 				$irqs{$irq}[$cpu] = $icount;
 			}
 			$irq_device{$irq} = @array[-1];
-			# check if there's a second device sharing the same IRQ
-			if (@array[-2] =~ /,/) {
-				$expand=10;
-				$irq_device{$irq}=@array[-2].@array[-1];
-			}
+        # check if there more devices sharing the same IRQ
+        #foreach $item (reverse(@array)) {
+        @revarray = reverse(@array);
+        foreach $item (@revarray[0..4]) {
+            if ($item =~ /,/) {
+                my @words = split /:/, $item;
+                # merge Xhci_hcd usb names
+                if (@words[0] =~ /hci_hcd/) {
+                    $item = @words[1];
+                    $item =~ tr/,//d;
+                    $irq_device{$irq}=$irq_device{$irq}.",".$item;
+                }
+            }
+            # Find biggest irq_device name
+            $cur_expand=length($irq_device{$irq});
+            if ($cur_expand > $expand) {
+                $expand = $cur_expand;
+            }
+        }
 	}
 
 	if ($first_time != 0) {
 		# Prepare sceeen
 		print $term->Tputs('ho');
 		# Output header
-		$cols=28+$expand;
-		$cols2=20+$expand;
+		$cols=10+$expand;
+		$cols2=4+$expand;
 		if ($DISPALLCPU > 0) {
 			printf("%${cols}s%" . ($cpus + 1) * 16 . "s", "", "IRQs/Second\n");
 		} else {
