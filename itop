@@ -105,27 +105,27 @@ PARSE:	while (<$fh>) {
 		$cols=10+$expand;
 		$cols2=4+$expand;
 		if ($DISPALLCPU > 0) {
-			printf("%${cols}s%" . ($cpus + 1) * 16 . "s", "", "IRQs/Second\n");
+			printf("%${cols}s%" . ($cpus + 1) * 10 . "s", "", "IRQs/Second\n");
 		} else {
-			printf("%${cols}s%" . 1 * 16 . "s", "", "IRQs/Second\n");
+			printf("%${cols}s%" . 1 * 10 . "s", "", "IRQs/Second\n");
 		}
 		printf("%${cols2}s (%3s)  ", "Device", "IRQ");
 		if ($DISPALLCPU > 0) {
 			foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
-				printf('%15s ', 'CPU' . $cpu);
+				printf('%9s ', 'CPU' . $cpu);
 			}
 		}
-		printf("%15s\n", "TOTAL");
+		printf("%9s\n", "TOTAL");
 		foreach $irq (sort mycriteria keys %irqs) {
 			printf("%${cols2}s (%3s): ", substr($irq_device{$irq}, 0, $cols2), $irq);
 			$total = 0;
 			for ($cpu = 0; $cpu < $cpus; $cpu ++) {
 				if ($DISPALLCPU > 0) {
-					printf("%15.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL);
+					printf("%9.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL);
 				}
 				$total += $irqs{$irq}[$cpu] - $last{$irq}[$cpu];
 			}
-			printf("%15.0f\n", $total / $INTERVAL);
+			printf("%9.0f\n", $total / $INTERVAL);
 		}
 	}
 	$first_time = 1;
