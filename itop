@@ -67,24 +67,24 @@ while (1) {
     }
 
     my %irqs;
-PARSE:    while (<$fh>) {
+PARSE:  while (<$fh>) {
         next PARSE if !/$FILTER/;
         my @array = split(' ',$_);
-            $irq = $array[0];
-            chop($irq);
-            for ($cpu = 0; $cpu < $cpus; $cpu++) {
-                $icount = $array[$cpu+1];
-                $irqs{$irq}[$cpu] = $icount;
-            }
-            if (@array[-1] =~ /_hcd:/) {
-                $item = @array[-1];
-                # remove '_hcd' from usb names
-                $item =~ s/_hcd//;
-                $item =~ tr/,//d;
-                $irq_device{$irq}=$item;
-            } else {
-                $irq_device{$irq} = @array[-1];
-            }
+        $irq = $array[0];
+        chop($irq);
+        for ($cpu = 0; $cpu < $cpus; $cpu++) {
+            $icount = $array[$cpu+1];
+            $irqs{$irq}[$cpu] = $icount;
+        }
+        if (@array[-1] =~ /_hcd:/) {
+            $item = @array[-1];
+            # remove '_hcd' from usb names
+            $item =~ s/_hcd//;
+            $item =~ tr/,//d;
+            $irq_device{$irq}=$item;
+        } else {
+            $irq_device{$irq} = @array[-1];
+        }
         # check if there more devices sharing the same IRQ
         @revarray = reverse(@array);
         foreach $item (@revarray[1..4]) {
