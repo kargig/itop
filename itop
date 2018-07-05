@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #
 #    Interrupts 'top-like' utility for Linux
 #
@@ -12,10 +12,13 @@
 # -t, --total DON'T display ALL CPUs, just the TOTAL.
 # -f <string>, --filter <string>: only display lines matching the specified filter string.
 # -i <number>, --interval <number>: update each <number> of seconds. Can be fractional.
+# -m <number>, --minimum <number>: minimum delta to print.
+# -s, --scroll scroll like vmstat, best for logging via script, screen, or tmux.
 #
 use IO::File;
 use Term::Cap;
 use Getopt::Long;
+use POSIX;
 
 sub mycriteria {
         if (($a =~ /(\d+)/) and ($b =~ /(\d+)/)) {
@@ -30,9 +33,13 @@ my $DISPLAYTOTAL='';
 # filter MUST have a space or by default we get nothing
 my $FILTER=' ';
 my $INTERVAL = 1.0;
+my $SCROLL = '';
+my $MINIMUM = 0.0;
 GetOptions('all' => \$DISPLAYALL,
        'total' => \$DISPLAYTOTAL,
        'filter=s' => \$FILTER,
+       'scroll' => \$SCROLL,
+       'minimum=f' => \$MINIMUM,
        'interval=f' => \$INTERVAL);
 
 if (($DISPLAYALL eq 1) and ($DISPLAYTOTAL eq 1)) {
@@ -41,7 +48,9 @@ if (($DISPLAYALL eq 1) and ($DISPLAYTOTAL eq 1)) {
 
 
 $term = Tgetent Term::Cap;
-print $term->Tputs('cl');
+if (! $SCROLL ) {
+    print $term->Tputs('cl');
+}
 
 $fh = new IO::File;
 
@@ -106,32 +115,42 @@ PARSE:  while (<$fh>) {
 
     if ($first_time != 0) {
         # Prepare sceeen
-        print $term->Tputs('ho');
+        if (! $SCROLL ) {
+            print $term->Tputs('ho');
+        } else {
+            printf("%s\n", POSIX::strftime('%F %T', (localtime())[0..5]));
+        }
         # Output header
         $cols=10+$expand;
         $cols2=4+$expand;
         if ($DISPALLCPU > 0) {
-            printf("%${cols}s%" . ($cpus + 1) * 10 . "s", "", "IRQs/Second\n");
+            $line = sprintf("%${cols}s%" . ($cpus + 1) * 10 . "s", "", "IRQs/Second\n");
         } else {
-            printf("%${cols}s%" . 1 * 10 . "s", "", "IRQs/Second\n");
+            $line = sprintf("%${cols}s%" . 1 * 10 . "s", "", "IRQs/Second\n");
         }
-        printf("%${cols2}s (%3s)  ", "Device", "IRQ");
+        $line .= sprintf("%${cols2}s (%3s)  ", "Device", "IRQ");
         if ($DISPALLCPU > 0) {
             foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
-                printf('%9s ', 'CPU' . $cpu);
+                $line .= sprintf('%9s ', 'CPU' . $cpu);
             }
         }
-        printf("%9s\n", "TOTAL");
+        $line .= sprintf("%9s\n", "TOTAL");
+        if (! $SCROLL) {
+            printf($line);
+        }
         foreach $irq (sort mycriteria keys %irqs) {
-            printf("%${cols2}s (%3s): ", substr($irq_device{$irq}, 0, $cols2), $irq);
+            $line = sprintf("%${cols2}s (%3s): ", substr($irq_device{$irq}, 0, $cols2), $irq);
             $total = 0;
             for ($cpu = 0; $cpu < $cpus; $cpu ++) {
                 if ($DISPALLCPU > 0) {
-                    printf("%9.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL);
+                    $line .= sprintf("%9.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL);
                 }
                 $total += $irqs{$irq}[$cpu] - $last{$irq}[$cpu];
             }
-            printf("%9.0f\n", $total / $INTERVAL);
+            $line .= sprintf("%9.0f\n", $total / $INTERVAL);
+            if ($total / $INTERVAL > $MINIMUM) {
+                printf($line);
+            }
         }
     }
     $first_time = 1;
