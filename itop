@@ -16,6 +16,23 @@
 use IO::File;
 use Term::Cap;
 use Getopt::Long;
+use Pod::Usage;
+
+=head1 SYNOPSIS
+
+    itop [OPTIONS]
+
+=head1 OPTIONS
+
+    -a|--all                 : force display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
+    -f|--filter <string>     : only show interrupts that match on the specified string
+    -h|--help                : print this help messages
+    -i|--interval <interval> : sample every <interval> seconds. Can be fractional.
+    -t|--total               : DON'T display ALL CPUs, just the TOTAL
+
+    Default: display ALL CPUs + TOTAL (unless CPUs > 8, then just display the TOTAL)
+
+=cut
 
 sub mycriteria {
         if (($a =~ /(\d+)/) and ($b =~ /(\d+)/)) {
@@ -33,7 +50,9 @@ my $INTERVAL = 1.0;
 GetOptions('all' => \$DISPLAYALL,
        'total' => \$DISPLAYTOTAL,
        'filter=s' => \$FILTER,
-       'interval=f' => \$INTERVAL);
+       'interval=f' => \$INTERVAL,
+       'help' => \my $help) or pod2usage(0);
+pod2usage(1) if $help;
 
 if (($DISPLAYALL eq 1) and ($DISPLAYTOTAL eq 1)) {
     die "Invalid options: cannot use both -t and -a.\n";
