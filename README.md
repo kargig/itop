@@ -49,9 +49,9 @@ $ itop -f eth0
 ```
 * Only display interrupts owned by the ahci driver, every five seconds:
 ```
-$ itop -f ahci -n 5
+$ itop -f ahci -i 5
 ```
 * Only display interrups owned by the ixgbe driver, ten times per second:
 ```
-$ itop -f ixgbe -n 0.1
+$ itop -f ixgbe -i 0.1
 ```
