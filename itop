@@ -4,15 +4,6 @@
 #
 #    Show the interrupts per second/per IRQ per CPU and TOTAL
 #
-# Usage
-# Default: display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
-# if (CPUS > 8): DON'T display ALL CPUs, just the TOTAL
-#
-# -a, --all force display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL.
-# -t, --total DON'T display ALL CPUs, just the TOTAL.
-# -f <string>, --filter <string>: only display lines matching the specified filter string.
-# -i <number>, --interval <number>: update each <number> of seconds. Can be fractional.
-#
 use IO::File;
 use Term::Cap;
 use Getopt::Long;
