@@ -36,11 +36,11 @@ use Pod::Usage;
 =cut
 
 sub mycriteria {
-        if (($a =~ /(\d+)/) and ($b =~ /(\d+)/)) {
-            $a <=> $b;
-        } else {
-            lc $a cmp lc $b;
-        }
+    if (($a =~ /(\d+)/) and ($b =~ /(\d+)/)) {
+        $a <=> $b;
+    } else {
+        lc $a cmp lc $b;
+    }
 }
 
 sub count_cpu {
