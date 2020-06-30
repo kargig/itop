@@ -4,36 +4,100 @@
 #
 #    Show the interrupts per second/per IRQ per CPU and TOTAL
 #
-# Usage
-# Default: display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
-# if (CPUS > 8): DON'T display ALL CPUs, just the TOTAL
-#
-# -a, --all force display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL.
-# -t, --total DON'T display ALL CPUs, just the TOTAL.
-# -f <string>, --filter <string>: only display lines matching the specified filter string.
-# -i <number>, --interval <number>: update each <number> of seconds. Can be fractional.
-#
 use IO::File;
 use Term::Cap;
 use Getopt::Long;
+use Pod::Usage;
+
+=head1 SYNOPSIS
+
+    itop [OPTIONS]
+
+=head1 OPTIONS
+
+    -a|--all                 : force display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
+    -c|--cpufilter <string>  : display only specifed CPUs (e.g. 0,1,4-6) + TOTAL
+    -f|--filter <string>     : only show interrupts that match on the specified string
+    -h|--help                : print this help messages
+    -i|--interval <interval> : sample every <interval> seconds. Can be fractional.
+    -t|--total               : DON'T display ALL CPUs, just the TOTAL
+
+    Default: display ALL CPUs + TOTAL (unless CPUs > 8, then just display the TOTAL)
+
+=cut
 
 sub mycriteria {
-        if (($a =~ /(\d+)/) and ($b =~ /(\d+)/)) {
-            $a <=> $b;
-        } else {
-            lc $a cmp lc $b;
-        }
+    if (($a =~ /(\d+)/) and ($b =~ /(\d+)/)) {
+        $a <=> $b;
+    } else {
+        lc $a cmp lc $b;
+    }
 }
+
+sub count_cpu {
+    my $r = 0;
+    for (@_) {
+        $r++ if ($_);
+    }
+    return $r;
+}
+
+sub make_cpumap {
+    my ($spec, $maxcpu) = @_;
+    my @cpuset = ();
+    my $last;
+    my $range = 0;
+
+    while ($spec =~ /^([0-9]+|,|-)/) {
+        if ($1 eq ',') {
+            if (defined ($last)) {
+                push @cpuset, $last;
+                $last = undef;
+            }
+            $range = 0;
+        } elsif ($1 eq '-') {
+            $range = 1;
+        } elsif ($range) {
+            $range = 0;
+            for ((defined ($last)? $last: 0)..$1) {
+                push @cpuset, $_;
+            }
+            $last = undef;
+        } else {
+            $last = $1;
+        }
+        $spec = $';
+    }
+
+    if ($range) {
+        for ((defined ($last)? $last: 0)..$maxcpu) {
+            push @cpuset, $_;
+        }
+    } elsif (defined ($last)) {
+        push @cpuset, $last;
+    }
+
+    my @cpumap;
+    foreach (sort {$a <=> $b} @cpuset) {
+        @cpumap[$_] = 1 if ($_ <= $maxcpu);
+    }
+    return @cpumap;
+}
+
 # Command line argument processing
 my $DISPLAYALL='';
 my $DISPLAYTOTAL='';
 # filter MUST have a space or by default we get nothing
 my $FILTER=' ';
 my $INTERVAL = 1.0;
+my $CPUFILTER = '';
 GetOptions('all' => \$DISPLAYALL,
        'total' => \$DISPLAYTOTAL,
        'filter=s' => \$FILTER,
-       'interval=f' => \$INTERVAL);
+       'interval=f' => \$INTERVAL,
+       'cpufilter=s' => \$CPUFILTER,
+       'help' => \my $help) or pod2usage(0);
+pod2usage(1) if $help;
 
 if (($DISPLAYALL eq 1) and ($DISPLAYTOTAL eq 1)) {
     die "Invalid options: cannot use both -t and -a.\n";
@@ -52,6 +116,7 @@ if (!$fh->open("</proc/interrupts")) {
 $top = $fh->getpos();
 $first_time = 0;
 my $expand=0;
+my @cpumap;
 while (1) {
     $expand=0;
     $fh->setpos($top);
@@ -60,10 +125,13 @@ while (1) {
     $header = <$fh>; # Header line
     # Count CPUs
     $cpus = () = $header =~ /CPU/g;
-    if (($DISPLAYALL eq 1) or ($cpus < 9)) {
-        $DISPALLCPU=1;
+
+    if ($CPUFILTER ne '') {
+        @cpumap = make_cpumap ($CPUFILTER, $cpus - 1);
+    } elsif (($DISPLAYALL eq 1) or ($cpus < 9)) {
+        @cpumap = make_cpumap ("-", $cpus - 1);
     } elsif (($DISPLAYTOTAL eq 1) or ($cpus > 8)) {
-        $DISPALLCPU=0;
+        @cpumap = make_cpumap ("", $cpus - 1);
     }
 
     my %irqs;
@@ -110,25 +178,17 @@ PARSE:  while (<$fh>) {
         # Output header
         $cols=10+$expand;
         $cols2=4+$expand;
-        if ($DISPALLCPU > 0) {
-            printf("%${cols}s%" . ($cpus + 1) * 10 . "s", "", "IRQs/Second\n");
-        } else {
-            printf("%${cols}s%" . 1 * 10 . "s", "", "IRQs/Second\n");
-        }
+        printf("%${cols}s%". (count_cpu(@cpumap) + 1) * 10 . "s", "", "IRQs/Second\n");
         printf("%${cols2}s (%3s)  ", "Device", "IRQ");
-        if ($DISPALLCPU > 0) {
-            foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
-                printf('%9s ', 'CPU' . $cpu);
-            }
+        foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
+            printf('%9s ', 'CPU' . $cpu) if (@cpumap[$cpu]);
         }
         printf("%9s\n", "TOTAL");
         foreach $irq (sort mycriteria keys %irqs) {
             printf("%${cols2}s (%3s): ", substr($irq_device{$irq}, 0, $cols2), $irq);
             $total = 0;
-            for ($cpu = 0; $cpu < $cpus; $cpu ++) {
-                if ($DISPALLCPU > 0) {
-                    printf("%9.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL);
-                }
+            for ($cpu = 0; $cpu < $cpus; $cpu++) {
+                printf("%9.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL) if (@cpumap[$cpu]);
                 $total += $irqs{$irq}[$cpu] - $last{$irq}[$cpu];
             }
             printf("%9.0f\n", $total / $INTERVAL);
