@@ -21,6 +21,7 @@ use Pod::Usage;
     -h|--help                : print this help messages
     -i|--interval <interval> : sample every <interval> seconds. Can be fractional.
     -t|--total               : DON'T display ALL CPUs, just the TOTAL
+    -m|--max                 : Show MAX number of interrupts per IRQ
 
     Default: display ALL CPUs + TOTAL (unless CPUs > 8, then just display the TOTAL)
 
@@ -87,12 +88,14 @@ sub make_cpumap {
 # Command line argument processing
 my $DISPLAYALL='';
 my $DISPLAYTOTAL='';
+my $DISPLAYMAX='';
 # filter MUST have a space or by default we get nothing
 my $FILTER=' ';
 my $INTERVAL = 1.0;
 my $CPUFILTER = '';
 GetOptions('all' => \$DISPLAYALL,
        'total' => \$DISPLAYTOTAL,
+       'max' => \$DISPLAYMAX,
        'filter=s' => \$FILTER,
        'interval=f' => \$INTERVAL,
        'cpufilter=s' => \$CPUFILTER,
@@ -183,15 +186,30 @@ PARSE:  while (<$fh>) {
         foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
             printf('%9s ', 'CPU' . $cpu) if (@cpumap[$cpu]);
         }
-        printf("%9s\n", "TOTAL");
+        printf("%9s", "TOTAL");
+        if ($DISPLAYMAX ne '') {
+            printf("%9s\n", "MAX");
+        } else {
+            printf("\n");
+        }
         foreach $irq (sort mycriteria keys %irqs) {
             printf("%${cols2}s (%3s): ", substr($irq_device{$irq}, 0, $cols2), $irq);
             $total = 0;
             for ($cpu = 0; $cpu < $cpus; $cpu++) {
                 printf("%9.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL) if (@cpumap[$cpu]);
                 $total += $irqs{$irq}[$cpu] - $last{$irq}[$cpu];
+                if ($DISPLAYMAX ne '') {
+                    if ($total > $max{$irq}) {
+                        $max{$irq} = $total
+                    }
+                }
             }
-            printf("%9.0f\n", $total / $INTERVAL);
+            printf("%9.0f", $total / $INTERVAL);
+            if ($DISPLAYMAX ne '') {
+                printf("%9.0f\n", $max{$irq});
+            } else {
+                printf("\n");
+            }
         }
     }
     $first_time = 1;

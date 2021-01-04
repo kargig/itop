@@ -1,3 +1,6 @@
+0.1.5
+Add `-m` cli option to also display `MAX` interrupts per IRQ
+
 0.1.4
 Allow to only display `TOTAL` even for hosts with < 9 CPUs
 

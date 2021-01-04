@@ -19,6 +19,7 @@ itop [-a|-t|-f <string>|-i <interval>|-c <string>]
 
  -a : force display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
  -t : DON'T display ALL CPUs, just the TOTAL
+ -m : display MAX interrupts per IRQ based on TOTAL
 ```
 
 Default: display ALL CPUs + TOTAL (unless CPUs > 8, then just display the TOTAL)
@@ -46,6 +47,16 @@ Examples
 * Display all interrupts, updating once per second:
 ```
 $ itop
+```
+* Display all interrupts, only show TOTAL count per IRQ, don't display per CPU
+  stats, updating once per second:
+```
+$ itop -t
+```
+* Display all interrupts, only show TOTAL count and MAX interrupts per IRQ,
+  updating once per second:
+```
+$ itop -t -m
 ```
 * Only display interrupts related to eth0, once per second:
 ```
