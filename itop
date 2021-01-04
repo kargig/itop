@@ -128,7 +128,7 @@ while (1) {
 
     if ($CPUFILTER ne '') {
         @cpumap = make_cpumap ($CPUFILTER, $cpus - 1);
-    } elsif (($DISPLAYALL eq 1) or ($cpus < 9)) {
+    } elsif (($DISPLAYALL eq 1) or ($cpus < 9 and $DISPLAYTOTAL != 1)) {
         @cpumap = make_cpumap ("-", $cpus - 1);
     } elsif (($DISPLAYTOTAL eq 1) or ($cpus > 8)) {
         @cpumap = make_cpumap ("", $cpus - 1);
