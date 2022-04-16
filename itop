@@ -85,6 +85,77 @@ sub make_cpumap {
     return @cpumap;
 }
 
+sub make_print_context {
+    my ($expand, $interval, $displaymax) = @_;
+
+    return {
+        'cols'  => 10 + $expand,
+        'cols2' => 4 + $expand,
+        'interval' => $interval,
+        'displaymax' => $displaymax,
+    };
+}
+
+sub print_meta_header {
+    my ($pctx, $cpumap) = @_;
+    my $cols = $pctx->{'cols'};
+
+    printf("%${cols}s%". (count_cpu(@$cpumap) + 1) * 10 . "s", "", "IRQs/Second\n");
+}
+
+sub print_header {
+    my ($pctx, $cpumap, $cpus) = @_;
+    my $cols2 = $pctx->{'cols2'};
+    my $displaymax = $pctx->{'displaymax'};
+
+    printf("%${cols2}s (%3s)  ", "Device", "IRQ");
+    foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
+        printf('%9s ', 'CPU' . $cpu) if ($cpumap->[$cpu]);
+    }
+    printf("%9s", "TOTAL");
+    if ($displaymax ne '') {
+        printf("%9s\n", "MAX");
+    } else {
+        printf("\n");
+    }
+}
+
+sub print_lines {
+    my ($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max) = @_;
+    my $cols2 = $pctx->{'cols2'};
+    my $interval = $pctx->{"interval"};
+    my $displaymax = $pctx->{'displaymax'};
+
+    foreach $irq (sort mycriteria keys %$irqs) {
+        printf("%${cols2}s (%3s): ", substr($irq_device->{$irq}, 0, $cols2), $irq);
+
+        my $total = 0;
+        for ($cpu = 0; $cpu < $cpus; $cpu++) {
+            printf("%9.0f ", ($irqs->{$irq}[$cpu] - $last{$irq}[$cpu]) / $interval) if ($cpumap->[$cpu]);
+            $total += $irqs->{$irq}[$cpu] - $last->{$irq}[$cpu];
+            if ($displaymax ne '') {
+                if ($total > $max->{$irq}) {
+                    $max->{$irq} = $total
+                }
+            }
+        }
+        printf("%9.0f", $total / $interval);
+        if ($displaymax ne '') {
+            printf("%9.0f\n", $max->{$irq});
+        } else {
+            printf("\n");
+        }
+    }
+}
+
+sub print_table {
+    my ($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max) = @_;
+
+    print_meta_header($pctx, $cpumap);
+    print_header($pctx, $cpumap, $cpus);
+    print_lines($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max);
+}
+
 # Command line argument processing
 my $DISPLAYALL='';
 my $DISPLAYTOTAL='';
@@ -178,39 +249,8 @@ PARSE:  while (<$fh>) {
     if ($first_time != 0) {
         # Prepare sceeen
         print $term->Tputs('ho');
-        # Output header
-        $cols=10+$expand;
-        $cols2=4+$expand;
-        printf("%${cols}s%". (count_cpu(@cpumap) + 1) * 10 . "s", "", "IRQs/Second\n");
-        printf("%${cols2}s (%3s)  ", "Device", "IRQ");
-        foreach ($cpu = 0; $cpu < $cpus; $cpu++) {
-            printf('%9s ', 'CPU' . $cpu) if (@cpumap[$cpu]);
-        }
-        printf("%9s", "TOTAL");
-        if ($DISPLAYMAX ne '') {
-            printf("%9s\n", "MAX");
-        } else {
-            printf("\n");
-        }
-        foreach $irq (sort mycriteria keys %irqs) {
-            printf("%${cols2}s (%3s): ", substr($irq_device{$irq}, 0, $cols2), $irq);
-            $total = 0;
-            for ($cpu = 0; $cpu < $cpus; $cpu++) {
-                printf("%9.0f ", ($irqs{$irq}[$cpu] - $last{$irq}[$cpu]) / $INTERVAL) if (@cpumap[$cpu]);
-                $total += $irqs{$irq}[$cpu] - $last{$irq}[$cpu];
-                if ($DISPLAYMAX ne '') {
-                    if ($total > $max{$irq}) {
-                        $max{$irq} = $total
-                    }
-                }
-            }
-            printf("%9.0f", $total / $INTERVAL);
-            if ($DISPLAYMAX ne '') {
-                printf("%9.0f\n", $max{$irq});
-            } else {
-                printf("\n");
-            }
-        }
+        my $pctx = make_print_context($expand, $INTERVAL, $DISPLAYMAX);
+        print_table($pctx, \@cpumap, $cpus, \%irqs, \%irq_device, \%last, \%max);
     }
     $first_time = 1;
 
