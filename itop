@@ -22,6 +22,7 @@ use Pod::Usage;
     -i|--interval <interval> : sample every <interval> seconds. Can be fractional.
     -t|--total               : DON'T display ALL CPUs, just the TOTAL
     -m|--max                 : Show MAX number of interrupts per IRQ
+    -T|--transpose           : Transpose the display
 
     Default: display ALL CPUs + TOTAL (unless CPUs > 8, then just display the TOTAL)
 
@@ -86,14 +87,19 @@ sub make_cpumap {
 }
 
 sub make_print_context {
-    my ($expand, $interval, $displaymax) = @_;
-
-    return {
-        'cols'  => 10 + $expand,
-        'cols2' => 4 + $expand,
+    my ($expand, $interval, $displaymax, $transpose) = @_;
+    my $ctx = {
         'interval' => $interval,
         'displaymax' => $displaymax,
+        'transpose' => $transpose,
     };
+
+    if (!$transpose) {
+        $ctx->{'cols'}  = 10 + $expand;
+        $ctx->{'cols2'} =  4 + $expand;
+    }
+
+    return $ctx;
 }
 
 sub print_meta_header {
@@ -148,12 +154,104 @@ sub print_lines {
     }
 }
 
+sub print_meta_header_tr {
+    my ($pctx, $irqs, $irq_device) = @_;
+    my $cols = 0;
+
+    # length("TOTAL") == 5
+    $pctx->{'cols_tr'} = 5;
+    $cols += $pctx->{'cols_tr'};
+
+    my @sorted_irqs = sort mycriteria keys %$irqs;
+    $pctx->{'sorted_irqs'} = \@sorted_irqs;
+
+    foreach $irq (@sorted_irqs) {
+        my $base = length($irq_device->{$irq});
+        # " (${irq})"
+        #  ^^      ^ => characters
+        my $extra = 3 + length ($irq);
+        # 9 comes from printf ("%9.0f"...) in the original non-transposed code.
+        if ($base + $extra < 9) {
+            $base += 9 - ($base + $extra);
+        }
+        # 4 is for space between columns
+        $base += 4;
+        $pctx->{'cols2_base_tr'}[$irq] = $base;
+        $pctx->{'cols2_full_tr'}[$irq] = $base + $extra;
+        $cols += $pctx->{'cols2_full_tr'}[$irq];
+    }
+
+    printf("%${cols}s", "IRQs/Second\n");
+}
+
+sub print_header_tr {
+    my ($pctx, $cpus, $irqs, $irq_device) = @_;
+    my $cols_tr = $pctx->{'cols_tr'};
+    my $sorted_irqs = $pctx->{'sorted_irqs'};
+
+    printf("%${cols_tr}s", "CPU#");
+    foreach $irq (@$sorted_irqs) {
+        my $base = $pctx->{'cols2_base_tr'}[$irq];
+        printf("%${base}s (%s)", $irq_device->{$irq}, $irq);
+    }
+    printf("\n");
+}
+
+sub print_lines_tr {
+    my ($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max) = @_;
+    my $interval = $pctx->{"interval"};
+    my $displaymax = $pctx->{'displaymax'};
+    my $cols_tr = $pctx->{'cols_tr'};
+    my $cols2_full_tr = $pctx->{'cols2_full_tr'};
+    my $sorted_irqs = $pctx->{'sorted_irqs'};
+
+    foreach $irq (@$sorted_irqs) {
+        $total[$irq] = 0;
+    }
+
+    for ($cpu = 0; $cpu < $cpus; $cpu++) {
+        next if (!$cpumap->[$cpu]);
+        printf("%${cols_tr}d", $cpu);
+        foreach $irq (@$sorted_irqs) {
+            my $cols = $pctx->{'cols2_full_tr'}[$irq];
+            printf("%${cols}.0f", ($irqs->{$irq}[$cpu] - $last{$irq}[$cpu]) / $interval);
+            $total[$irq] += $irqs->{$irq}[$cpu] - $last->{$irq}[$cpu];
+            if ($displaymax ne '' && ($total[$irq] > $max->{$irq})) {
+                $max->{$irq} = $total[$irq];
+            }
+        }
+        printf("\n");
+    }
+
+    printf("%${cols_tr}s", "TOTAL");
+    foreach $irq (@$sorted_irqs) {
+        my $cols = $pctx->{'cols2_full_tr'}[$irq];
+        printf("%${cols}.0f", ($total[$irq]) / $interval);
+    }
+    printf("\n");
+
+    if ($displaymax ne '') {
+        printf("%${cols_tr}s", "MAX");
+        foreach $irq (@$sorted_irqs) {
+            my $cols = $pctx->{'cols2_full_tr'}[$irq];
+            printf("%${cols}.0f", $max->{$irq});
+        }
+        printf("\n");
+    }
+}
+
 sub print_table {
     my ($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max) = @_;
 
-    print_meta_header($pctx, $cpumap);
-    print_header($pctx, $cpumap, $cpus);
-    print_lines($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max);
+    if ($pctx->{'transpose'}) {
+        print_meta_header_tr($pctx, $irqs, $irq_device);
+        print_header_tr($pctx, $cpus, $irqs, $irq_device);
+        print_lines_tr($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max);
+    } else {
+        print_meta_header($pctx, $cpumap);
+        print_header($pctx, $cpumap, $cpus);
+        print_lines($pctx, $cpumap, $cpus, $irqs, $irq_device, $last, $max);
+    }
 }
 
 # Command line argument processing
@@ -164,12 +262,14 @@ my $DISPLAYMAX='';
 my $FILTER=' ';
 my $INTERVAL = 1.0;
 my $CPUFILTER = '';
+my $TRANSPOSE = 0;
 GetOptions('all' => \$DISPLAYALL,
        'total' => \$DISPLAYTOTAL,
        'max' => \$DISPLAYMAX,
        'filter=s' => \$FILTER,
        'interval=f' => \$INTERVAL,
        'cpufilter=s' => \$CPUFILTER,
+       'transpose|T' => \$TRANSPOSE,
        'help' => \my $help) or pod2usage(0);
 pod2usage(1) if $help;
 
@@ -249,7 +349,7 @@ PARSE:  while (<$fh>) {
     if ($first_time != 0) {
         # Prepare sceeen
         print $term->Tputs('ho');
-        my $pctx = make_print_context($expand, $INTERVAL, $DISPLAYMAX);
+        my $pctx = make_print_context($expand, $INTERVAL, $DISPLAYMAX, $TRANSPOSE);
         print_table($pctx, \@cpumap, $cpus, \%irqs, \%irq_device, \%last, \%max);
     }
     $first_time = 1;
