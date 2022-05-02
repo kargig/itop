@@ -15,11 +15,12 @@ Usage
 -----
 
 ```
-itop [-a|-t|-f <string>|-i <interval>|-c <string>]
+itop [-a|-t|-T|-f <string>|-i <interval>|-c <string>]
 
  -a : force display ALL CPUs (caution if you have many CPUs and a narrow screen) + TOTAL
  -t : DON'T display ALL CPUs, just the TOTAL
  -m : display MAX interrupts per IRQ based on TOTAL
+ -T : transpose the output (suitable for running "itop -a" on computers having many CPUs)
 ```
 
 Default: display ALL CPUs + TOTAL (unless CPUs > 8, then just display the TOTAL)
